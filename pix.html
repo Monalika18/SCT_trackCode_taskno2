@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Encryption Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .controls {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        select, input[type="number"], input[type="text"], input[type="file"] {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        input[type="number"], input[type="text"] {
+            width: 120px;
+        }
+        button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+        #result {
+            text-align: center;
+            margin-top: 10px;
+            color: #555;
+            font-style: italic;
+        }
+        .hint {
+            font-size: 12px;
+            color: #777;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Encryption Tool</h1>
+    <input type="file" id="imageInput" accept="image/*">
+    <div class="controls">
+        <label>Key:
+            <input type="text" id="key" placeholder="e.g., mysecretkey123">
+        </label>
+        <span class="hint">(Use a unique key for encryption)</span>
+        <label>Shift:
+            <input type="number" id="shift" min="1" max="255" placeholder="e.g., 50">
+        </label>
+        <button onclick="encryptImage()">Encrypt</button>
+        <button onclick="decryptImage()">Decrypt</button>
+    </div>
+    <canvas id="canvas" width="600" height="400"></canvas>
+    <div id="result"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const imageInput = document.getElementById('imageInput');
+        const keyInput = document.getElementById('key');
+        const shiftInput = document.getElementById('shift');
+        let originalImageData = null;
+        let encryptedImageData = null;
+
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const img = new Image();
+            img.onload = function() {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                encryptedImageData = null; // Reset encrypted data
+            };
+            img.src = URL.createObjectURL(file);
+        });
+
+        function generateKeyStream(key, length) {
+            let stream = new Uint8Array(length);
+            for (let i = 0; i < length; i++) {
+                stream[i] = key.charCodeAt(i % key.length);
+            }
+            return stream;
+        }
+
+        function encryptImage() {
+            if (!originalImageData) {
+                alert('Please upload an image first!');
+                return;
+            }
+
+            const key = keyInput.value || 'defaultkey';
+            const shift = parseInt(shiftInput.value) || 50;
+            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const keyStream = generateKeyStream(key, data.length);
+
+            for (let i = 0; i < data.length; i += 4) {
+                // Apply shift first, then XOR with key stream
+                data[i] = (originalImageData.data[i] + shift) % 256;     // Red
+                data[i + 1] = (originalImageData.data[i + 1] + shift) % 256; // Green
+                data[i + 2] = (originalImageData.data[i + 2] + shift) % 256; // Blue
+                data[i] ^= keyStream[i];     // Red
+                data[i + 1] ^= keyStream[i + 1]; // Green
+                data[i + 2] ^= keyStream[i + 2]; // Blue
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            encryptedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            document.getElementById('result').innerText = 'Image encrypted!';
+        }
+
+        function decryptImage() {
+            if (!originalImageData || !encryptedImageData) {
+                alert('Please upload an image and encrypt it first!');
+                return;
+            }
+
+            const key = keyInput.value || 'defaultkey';
+            const shift = parseInt(shiftInput.value) || 50;
+            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const keyStream = generateKeyStream(key, data.length);
+
+            for (let i = 0; i < data.length; i += 4) {
+                // Reverse XOR first, then subtract shift
+                data[i] ^= keyStream[i];     // Red
+                data[i + 1] ^= keyStream[i + 1]; // Green
+                data[i + 2] ^= keyStream[i + 2]; // Blue
+                data[i] = (data[i] - shift + 256) % 256;     // Red
+                data[i + 1] = (data[i + 1] - shift + 256) % 256; // Green
+                data[i + 2] = (data[i + 2] - shift + 256) % 256; // Blue
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            document.getElementById('result').innerText = 'Image decrypted!';
+        }
+    </script>
+</body>
+</html>
