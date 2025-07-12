@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Encryption Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #f5f5f5;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+            animation: fadeIn 1s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .controls {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        label {
+            font-weight: bold;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+        }
+        select, input[type="number"], input[type="text"], input[type="file"] {
+            padding: 10px;
+            margin-right: 10px;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        input[type="number"], input[type="text"] {
+            width: 150px;
+        }
+        input[type="file"] {
+            padding: 8px 0;
+        }
+        input:focus, select:focus {
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+            outline: none;
+        }
+        button {
+            padding: 12px 25px;
+            margin-right: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        button:hover {
+            background-color: #45a049;
+            transform: scale(1.05);
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        canvas {
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        #result {
+            text-align: center;
+            margin-top: 15px;
+            color: #555;
+            font-style: italic;
+            font-size: 16px;
+            animation: fadeIn 0.5s ease-in;
+        }
+        .hint {
+            font-size: 12px;
+            color: #777;
+            margin-left: 10px;
+        }
+        .download-btn {
+            background-color: #2196F3;
+            margin-top: 10px;
+        }
+        .download-btn:hover {
+            background-color: #1976D2;
+        }
+        .reset-btn {
+            background-color: #f44336;
+        }
+        .reset-btn:hover {
+            background-color: #d32f2f;
+        }
+        @media (max-width: 600px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            button {
+                width: 100%;
+                margin: 5px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Encryption Tool</h1>
+    <input type="file" id="imageInput" accept="image/*">
+    <div class="controls">
+        <label>Key:
+            <input type="text" id="key" placeholder="e.g., mysecretkey123" required>
+        </label>
+        <span class="hint">(Use a unique key for encryption)</span>
+        <label>Shift:
+            <input type="number" id="shift" min="1" max="255" placeholder="e.g., 50" required>
+        </label>
+        <button onclick="encryptImage()">Encrypt</button>
+        <button onclick="decryptImage()">Decrypt</button>
+        <button class="download-btn" onclick="downloadImage()">Download</button>
+        <button class="reset-btn" onclick="resetTool()">Reset</button>
+    </div>
+    <canvas id="canvas" width="600" height="400"></canvas>
+    <div id="result"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const imageInput = document.getElementById('imageInput');
+        const keyInput = document.getElementById('key');
+        const shiftInput = document.getElementById('shift');
+        let originalImageData = null;
+        let encryptedImageData = null;
+
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const img = new Image();
+            img.onload = function() {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                encryptedImageData = null;
+                updateResult('Image loaded successfully!');
+            };
+            img.onerror = function() {
+                updateResult('Error loading image!');
+            };
+            img.src = URL.createObjectURL(file);
+        });
+
+        function generateKeyStream(key, length) {
+            let stream = new Uint8Array(length);
+            for (let i = 0; i < length; i++) {
+                stream[i] = key.charCodeAt(i % key.length);
+            }
+            return stream;
+        }
+
+        function updateResult(message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerText = message;
+            resultDiv.style.color = message.includes('Error') ? '#f44336' : '#555';
+        }
+
+        function encryptImage() {
+            if (!originalImageData) {
+                updateResult('Please upload an image first!');
+                return;
+            }
+            if (!keyInput.value || !shiftInput.value) {
+                updateResult('Please provide a key and shift value!');
+                return;
+            }
+
+            const key = keyInput.value.trim();
+            const shift = parseInt(shiftInput.value);
+            if (shift < 1 || shift > 255) {
+                updateResult('Shift must be between 1 and 255!');
+                return;
+            }
+
+            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const keyStream = generateKeyStream(key, data.length);
+
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = (originalImageData.data[i] + shift) % 256;     // Red
+                data[i + 1] = (originalImageData.data[i + 1] + shift) % 256; // Green
+                data[i + 2] = (originalImageData.data[i + 2] + shift) % 256; // Blue
+                data[i] ^= keyStream[i];     // Red
+                data[i + 1] ^= keyStream[i + 1]; // Green
+                data[i + 2] ^= keyStream[i + 2]; // Blue
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            encryptedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            updateResult('Image encrypted successfully!');
+        }
+
+        function decryptImage() {
+            if (!encryptedImageData) {
+                updateResult('Please encrypt an image first!');
+                return;
+            }
+            if (!keyInput.value || !shiftInput.value) {
+                updateResult('Please provide the same key and shift value used for encryption!');
+                return;
+            }
+
+            const key = keyInput.value.trim();
+            const shift = parseInt(shiftInput.value);
+            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const keyStream = generateKeyStream(key, data.length);
+
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] ^= keyStream[i];     // Red
+                data[i + 1] ^= keyStream[i + 1]; // Green
+                data[i + 2] ^= keyStream[i + 2]; // Blue
+                data[i] = (data[i] - shift + 256) % 256;     // Red
+                data[i + 1] = (data[i + 1] - shift + 256) % 256; // Green
+                data[i + 2] = (data[i + 2] - shift + 256) % 256; // Blue
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            updateResult('Image decrypted successfully!');
+        }
+
+        function downloadImage() {
+            if (!ctx.getImageData(0, 0, canvas.width, canvas.height).data.some(v => v !== 0)) {
+                updateResult('No image to download!');
+                return;
+            }
+            const link = document.createElement('a');
+            link.download = `encrypted_image_${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            updateResult('Image downloaded!');
+        }
+
+        function resetTool() {
+            canvas.width = canvas.width; // Clears the canvas
+            originalImageData = null;
+            encryptedImageData = null;
+            imageInput.value = '';
+            keyInput.value = '';
+            shiftInput.value = '';
+            updateResult('Tool reset successfully!');
+        }
+    </script>
+</body>
+</html>
